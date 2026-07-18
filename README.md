@@ -10,7 +10,7 @@
 2. [Các khái niệm cơ bản](#2-các-khái-niệm-cơ-bản)
 3. [Part 1: Viết Dockerfile & Build Image](#part-1-viết-dockerfile--build-image)
 4. [Part 2: Quản lý Container](#part-2-quản-lý-container)
-5. [Part 3: Chia sẻ Image lên Docker Hub](#part-3-chia-sẻ-image-lên-docker-hub)
+5. [Part 3: Thao tác với Docker Hub](#part-3-thao-tác-với-docker-hub)
 6. [Part 4: Persist Data với Volumes](#part-4-persist-data-volumes)
 7. [Part 5: Dev Mode với Bind Mounts](#part-5-dev-mode-v-bind-mounts)
 8. [Part 6: Multi-container với Networking](#part-6-multi-container-vi-mạng)
@@ -198,36 +198,81 @@ docker run -dp 3000:3000 --name todo-app todo-image
 
 ---
 
-## Part 3: Chia sẻ Image lên Docker Hub
+## Part 3: Thao tác với Docker Hub
 
-### Bước 1: Đăng nhập Docker Hub
+> **Docker Hub** là kho lưu trữ image trực tuyến, nơi bạn có thể chia sẻ và tải về các Docker image. Tương tự như GitHub nhưng dành cho Docker image.
+
+### Bước 1: Đăng nhập / Đăng xuất Docker Hub
 
 ```bash
+# Đăng nhập Docker Hub
 docker login
+
+# Đăng nhập với username cụ thể
+docker login -u <your-username>
+
+# Đăng nhập bằng Access Token (an toàn hơn password)
+echo "<your-access-token>" | docker login -u <your-username> --password-stdin
+
+# Đăng xuất
+docker logout
 ```
 
-Nhập username và password (hoặc Access Token) của bạn.
+> 💡 **Lưu ý:** Docker Desktop có thể tự duy trì session đăng nhập. Dùng `docker logout` để xóa thông tin đăng nhập trên máy.
 
-### Bước 2: Tag image
+### Bước 2: Tạo & Tag Image
 
 ```bash
+# Build image với tên và tag
 docker build -t todo-image:1.0 .
+
+# Tag image với namespace Docker Hub
 docker tag todo-image:1.0 <your-username>/docker-tutorial:1.0
+
+# Tag nhiều tag khác nhau cho cùng 1 image
+docker tag todo-image:1.0 <your-username>/docker-tutorial:latest
+docker tag todo-image:1.0 <your-username>/docker-tutorial:1.0.1
 ```
 
-Ví dụ với username `nbhson`:
+**Quy tắc đặt tên image cho Docker Hub:**
+
+| Format | Ý nghĩa |
+|--------|----------|
+| `<username>/<repo>` | Image trong account cá nhân |
+| `<org>/<repo>` | Image thuộc organization |
+| `library/<repo>` | Image chính thức (official image) |
+| `<username>/<repo>:<tag>` | Version cụ thể |
+| `<username>/<repo>:latest` | Tag mặc định (latest) |
+
+### Bước 3: Push Image lên Docker Hub
 
 ```bash
-docker tag todo-image:1.0 nbhson/docker-tutorial:1.0
-```
-
-### Bước 3: Push lên Docker Hub
-
-```bash
+# Push image với tag cụ thể
 docker push <your-username>/docker-tutorial:1.0
+
+# Push image latest
+docker push <your-username>/docker-tutorial:latest
+
+# Push tất cả các tag của cùng 1 repository
+docker push <your-username>/docker-tutorial --all-tags
 ```
 
-### Bước 4: Chạy image từ Docker Hub
+### Bước 4: Pull Image từ Docker Hub
+
+```bash
+# Pull image chính thức
+docker pull nginx
+docker pull nginx:alpine
+docker pull nginx:1.25
+
+# Pull image từ account cá nhân
+docker pull <your-username>/docker-tutorial:1.0
+
+# Pull image latest (mặc định)
+docker pull <your-username>/docker-tutorial
+```
+
+### Bước 5: Chạy image từ Docker Hub
 
 Bất kỳ ai cũng có thể chạy image của bạn:
 
@@ -236,6 +281,98 @@ docker run -dp 3000:3000 <your-username>/docker-tutorial:1.0
 ```
 
 > 💡 Thử tại https://labs.play-with-docker.com/ - mở port 3000 và chạy lệnh trên!
+
+### Tìm kiếm Image trên Docker Hub
+
+```bash
+# Tìm image theo tên
+docker search nginx
+
+# Tìm image và giới hạn kết quả
+docker search --limit 5 nginx
+
+# Tìm image theo số stars
+docker search --filter stars=100 nginx
+
+# Tìm official image only
+docker search --filter is-official=true nginx
+
+# Tìm image có Automated build
+docker search --filter is-automated=true nginx
+```
+
+### Quản lý Remote Image
+
+```bash
+# Xem chi tiết image (bao gồm size, layers, tags)
+docker image inspect <your-username>/docker-tutorial:1.0
+
+# Xem history (các layers) của image
+docker history <your-username>/docker-tutorial:1.0
+
+# Xóa local image sau khi push
+docker image rm <your-username>/docker-tutorial:1.0
+
+# Dọn dẹp các image không sử dụng (dangling images)
+docker image prune
+
+# Dọn dẹp TẤT CẢ image không sử dụng
+docker image prune -a
+
+# Xóa image local theo ID
+docker image rm <image-id>
+```
+
+### Xem thông tin về repository
+
+```bash
+# Xem tất cả image của bạn
+docker image ls
+
+# Filter image theo repository
+docker image ls <your-username>/docker-tutorial
+
+# Filter theo tag
+docker image ls --filter reference=<your-username>/docker-tutorial:*
+
+# Format output
+docker image ls --format "{{.Repository}}:{{.Tag}} - {{.Size}}"
+```
+
+### Multi-Architecture Build (Multi-Platform)
+
+```bash
+# Tạo builder hỗ trợ buildx (multi-platform)
+docker buildx create --name mybuilder --use
+docker buildx inspect --bootstrap
+
+# Build image cho nhiều platform cùng lúc
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t <your-username>/docker-tutorial:1.0 . --push
+
+# Build và push
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t <your-username>/docker-tutorial:latest \
+  --push .
+```
+
+### Docker Hub API (thông qua CLI)
+
+```bash
+# Tải image từ Docker Hub Registry API
+curl -s "https://hub.docker.com/v2/repositories/<your-username>/docker-tutorial/tags/" | jq
+
+# Xem thông tin repo
+curl -s "https://hub.docker.com/v2/repositories/<your-username>/docker-tutorial/" | jq
+```
+
+### Best Practices khi sử dụng Docker Hub
+
+1. **Luôn sử dụng tag cụ thể** — Tránh dùng `latest` trong production vì nó có thể thay đổi bất ngờ.
+2. **Viết README tốt** — Docker Hub hỗ trợ Markdown README cho mỗi repository.
+3. **Sử dụng Access Token** — Thay vì password, tạo Access Token trong Docker Hub Settings > Security.
+4. **Kiểm tra vulnerability** — Docker Hub có tích hợp Docker Scout để scan vulnerabilities.
+5. **Automated Build** — Kết nối repository GitHub/GitLab để tự động build image khi có commit mới.
 
 ---
 
@@ -611,30 +748,43 @@ Trong tutorial này, bạn đã học được:
 
 ```bash
 # Images
-docker build -t <name> .          # Build image
-docker image ls                   # List images
-docker image rm <image>           # Remove image
+docker build -t <name> .                    # Build image
+docker image ls                             # List images
+docker image rm <image>                     # Remove image
+docker image prune -a                       # Remove all unused images
+docker history <image>                      # View image layers
 
 # Containers
-docker run -dp <host>:<container> <image>  # Run container
-docker ps                                     # List running containers
-docker ps -a                                  # List all containers
-docker stop <container>                       # Stop container
-docker start <container>                      # Start container
-docker rm <container>                         # Remove container
-docker logs -f <container>                    # View logs
-docker exec -it <container> sh                # Shell into container
+docker run -dp <host>:<container> <image>   # Run container
+docker ps                                   # List running containers
+docker ps -a                                # List all containers
+docker stop <container>                     # Stop container
+docker start <container>                    # Start container
+docker rm <container>                       # Remove container
+docker logs -f <container>                  # View logs
+docker exec -it <container> sh              # Shell into container
+
+# Docker Hub
+docker login                                # Login to Docker Hub
+docker login -u <username>                  # Login with username
+docker logout                               # Logout from Docker Hub
+docker search <keyword>                     # Search images on Docker Hub
+docker pull <image>                         # Pull image from Docker Hub
+docker push <image>                         # Push image to Docker Hub
+docker push <image> --all-tags              # Push all tags of an image
+docker tag <src-image> <dst-image>          # Tag an image
 
 # Volumes
-docker volume create <name>       # Create volume
-docker volume ls                  # List volumes
-docker volume inspect <name>      # Inspect volume
+docker volume create <name>                 # Create volume
+docker volume ls                            # List volumes
+docker volume inspect <name>                # Inspect volume
 
 # Compose
-docker compose up -d              # Start all services
-docker compose down               # Stop all services
-docker compose ps                 # List services
-docker compose logs -f            # View logs
+docker compose up -d                        # Start all services
+docker compose down                         # Stop all services
+docker compose ps                           # List services
+docker compose logs -f                      # View logs
+docker compose up -d --build                # Rebuild and restart
 ```
 
 ---
