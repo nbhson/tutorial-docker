@@ -1,6 +1,6 @@
 # Docker Tutorial - Xây dựng Todo App với Docker
 
-> Tutorial hướng dẫn sử dụng Docker từ cơ bản đến nâng cao thông qua việc xây dựng một ứng dụng **Todo CRUD API** sử dụng Node.js, Express và MySQL.
+> Tutorial này dạy bạn dùng Docker từ con số 0 đến nâng cao. Cách học: tự tay xây một ứng dụng **Todo CRUD API** bằng Node.js, Express và MySQL. Học mà làm — làm xong là nhớ.
 
 ## 📌 Version sử dụng trong tutorial (cập nhật 10/2026)
 
@@ -11,7 +11,11 @@
 | **Compose file format** | Compose Specification | Không còn dùng `version: "2.x"` hay `version: "3.x"` trong file YAML (đã **obsolete**). Tên file khuyến nghị: `compose.yaml`. |
 | **BuildKit / Buildx** | BuildKit v0.25+ / Buildx v0.28+ | Build mặc định qua BuildKit, hỗ trợ multi-stage, cache mount, build checks. |
 
+> **Cách đọc bảng này:** Cột "Thành phần" là công cụ, cột "Version" là phiên bản an toàn để dùng, cột "Ghi chú" giải thích thêm. Chỉ cần nhớ: cài Docker Desktop mới là đủ.
+
 > ⚠️ **Quan trọng:** Nếu bạn vẫn đang dùng Docker Compose v1 (`docker-compose` viết thường, Python-based) thì đã **EOL từ 06/2023**. Hãy nâng cấp lên Docker Desktop (Compose v2/v5 tích hợp sẵn) hoặc Docker Engine 28+.
+
+> **Tóm gọn 1 câu:** Dùng Docker Desktop bản mới nhất là có đủ mọi thứ; Compose v1 đã "nghỉ hưu", đừng dùng nữa.
 
 ---
 
@@ -38,11 +42,11 @@
 
 ### Docker là gì?
 
-Docker là một nền tảng mã nguồn mở giúp đóng gói ứng dụng và các phụ thuộc của nó vào trong một đơn vị gọi là **container**. Container có thể chạy trên bất kỳ máy nào có Docker installed, đảm bảo ứng dụng luôn hoạt động đồng nhất trên mọi môi trường.
+Docker giống như một chiếc "hộp chở hàng" cho ứng dụng. Bạn nhét app kèm toàn bộ đồ đạc nó cần (runtime, thư viện, config) vào một đơn vị gọi là **container**. Chiếc hộp này chạy được trên bất kỳ máy nào có cài Docker — máy dev, máy staging hay server production đều cho ra kết quả y hệt nhau. Hết cảnh "máy tôi chạy được mà máy anh không chạy".
 
 ### Tại sao phải dùng Docker?
 
-Việc setup và deploy ứng dụng lên server rất phức tạp: cài đặt runtime, database, cấu hình môi trường, chưa kể sự khác biệt giữa các hệ điều hành. Docker giải quyết vấn đề này bằng cách:
+Mục này giải thích lý do bạn cần Docker. Không có Docker, việc setup và deploy rất đau đầu: phải cài runtime, database, chỉnh config từng máy, chưa kể mỗi hệ điều hành một kiểu. Docker gói gọn mọi thứ lại, nên bạn chỉ cần "xé hộp" là chạy. Lợi ích cụ thể:
 
 - **Đồng nhất môi trường**: Dev, staging, production đều giống nhau
 - **Tách biệt dịch vụ**: Mỗi container đảm nhận một nhiệm vụ (app, database, cache...)
@@ -51,6 +55,8 @@ Việc setup và deploy ứng dụng lên server rất phức tạp: cài đặt
   - **Không bao giờ** nhúng secret (API key, password, private key) vào image qua `COPY`, `ENV` hay `ARG` — ngay cả khi bạn xóa file ở layer sau, file vẫn còn trong layer trước
   - Secret nên truyền lúc runtime qua biến môi trường, Docker secrets, hoặc secret manager
   - Dùng `.dockerignore` để loại trừ `.env`, credential files khỏi build context (xem Part 1)
+
+> **Tóm gọn 1 câu:** Docker đóng gói app thành "hộp" chạy được ở mọi nơi — nhưng nhớ rằng image không phải hộp đen, ai cũng đọc được code bên trong nên đừng giấu secret trong đó.
 
 ### Các khái niệm chính
 
@@ -62,37 +68,30 @@ Việc setup và deploy ứng dụng lên server rất phức tạp: cài đặt
 | **Docker Hub** | Kho lưu trữ trực tuyến các Docker image (tương tự GitHub nhưng cho image). |
 | **Docker Compose** | Công cụ định nghĩa và chạy multi-container applications. |
 
+> **Cách đọc bảng này:** Mỗi dòng là một khái niệm sẽ gặp suốt tutorial. Đọc theo thứ tự từ trên xuống: image là "bản thiết kế", Dockerfile là "công thức tạo bản thiết kế", container là "ngôi nhà dựng từ bản thiết kế".
+
+> **Tóm gọn 1 câu:** Nhớ bộ tứ: Dockerfile (công thức) → Image (bản đóng gói) → Container (bản đang chạy) → Docker Hub (kho chia sẻ).
+
 ---
 
 ## 2. Các khái niệm cơ bản
 
 ### Yêu cầu
 
+Trước khi bắt đầu, bạn cần hai thứ sau:
+
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) đã cài đặt trên máy tính
 - Docker Hub account (miễn phí): https://hub.docker.com
 
+> **Tóm gọn 1 câu:** Cài Docker Desktop và tạo account Docker Hub miễn phí — chỉ thế là đủ để học hết tutorial.
+
 ### Kiểm tra cài đặt
 
-```bash
-# Docker Engine version (27.x/28.x/29.x)
-docker --version
-# Docker Engine v29.9.2 — phiên bản mới nhất tính đến 10/2026
-
-# Docker Compose CLI (v2.x / v5.x) — dùng "docker compose" (không có dấu gạch ngang)
-docker compose version
-# Docker Compose version v5.6.1 (mới nhất tại thời điểm viết 10/2026, dùng Compose Specification)
-
-# BuildKit + Buildx (mặc định từ Engine v23+)
-docker buildx version
-# docker buildx github.com/docker/buildx v0.28.0
-
-# Docker Scout (tích hợp sẵn từ Docker Desktop 4.23+ / Engine v27+)
-docker scout version
-```
+> 📄 **Code ví dụ:** [`examples/01-kiem-tra-cai-at.sh`](examples/01-kiem-tra-cai-at.sh)
 
 ### Ứng dụng Demo
 
-Chúng ta sẽ xây dựng một Todo API với các endpoint:
+Đây là ứng dụng ta sẽ xây dựng: một Todo API — bạn có thể xem, thêm, sửa, xóa công việc. Nó có 4 endpoint:
 
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
@@ -101,42 +100,23 @@ Chúng ta sẽ xây dựng một Todo API với các endpoint:
 | `PUT` | `/items/:id` | Cập nhật todo |
 | `DELETE` | `/items/:id` | Xóa todo |
 
+> **Cách đọc bảng này:** Cột "Method" là kiểu hành động (GET = đọc, POST = thêm, PUT = sửa, DELETE = xóa), cột "Endpoint" là địa chỉ gọi API.
+
+> **Tóm gọn 1 câu:** Demo là một Todo API đầy đủ CRUD: xem, thêm, sửa, xóa công việc qua 4 endpoint.
+
 ---
 
 ## Part 1: Viết Dockerfile & Build Image
 
 ### Bước 1: Clone repository
 
-```bash
-git clone https://github.com/nbhson/docker-tutorial.git
-cd docker-tutorial
-```
+> 📄 **Code ví dụ:** [`examples/02-buoc-1-clone-repository.sh`](examples/02-buoc-1-clone-repository.sh)
 
 ### Bước 2: Tìm hiểu Dockerfile
 
-Dockerfile là "công thức" để xây dựng image. Xem file `Dockerfile` trong project:
+Mục này giúp bạn đọc hiểu Dockerfile trước khi tự viết. Hãy coi Dockerfile như "công thức nấu ăn": ghi rõ từng bước, Docker làm theo để "nấu" ra image. Xem file `Dockerfile` trong project:
 
-```dockerfile
-# syntax=docker/dockerfile:1
-
-# 1. Chọn base image - Node.js 22 trên Alpine Linux (nhẹ). Node 18 đã EOL 04/2025.
-FROM node:22-alpine
-
-# 2. Đặt thư mục làm việc trong container
-WORKDIR /app
-
-# 3. Copy toàn bộ source code vào container
-COPY . .
-
-# 4. Cài đặt dependencies
-RUN yarn install --production
-
-# 5. Khởi chạy ứng dụng
-CMD ["node", "src/index.js"]
-
-# 6. Mở port 3000
-EXPOSE 3000
-```
+> 📄 **Code ví dụ:** [`examples/03-buoc-2-tim-hieu-dockerfile.dockerfile`](examples/03-buoc-2-tim-hieu-dockerfile.dockerfile)
 
 > 💡 **Lưu ý:** Dockerfile ở trên là phiên bản đơn giản để học. Dockerfile thực tế trong repo là phiên bản **multi-stage** (2 stage + `USER node`) — xem chi tiết ở [Part 8: Multi-stage Builds](#part-8-multi-stage-builds). Ngoài ra, project có sẵn file **`.dockerignore`** để loại trừ `node_modules`, `.git`, `.env`, `spec/`, logs... khỏi build context — giúp build nhanh hơn và tránh leak secret vào image.
 
@@ -151,25 +131,29 @@ EXPOSE 3000
 | `CMD` | Lệnh mặc định để chạy khi container start. |
 | `EXPOSE` | Khai báo port mà container sẽ dùng (chỉ tài liệu, không tự mở port). |
 
+> **Cách đọc bảng này:** Mỗi dòng là một instruction (từ khóa) trong Dockerfile. Đọc từ trên xuống sẽ đúng thứ tự xuất hiện trong file: chọn gốc (`FROM`) → chọn chỗ làm việc (`WORKDIR`) → chép đồ vào (`COPY`) → chạy lệnh (`RUN`) → khai báo port (`EXPOSE`) → hẹn lệnh khởi động (`CMD`).
+
+> **Tóm gọn 1 câu:** Dockerfile là công thức nấu image: `FROM` chọn nền, `COPY` chép code, `RUN` cài đồ, `CMD` hẹn lệnh khởi động.
+
 ### Bước 3: Build image
 
-```bash
-docker build -t todo-image .
-```
+> 📄 **Code ví dụ:** [`examples/04-buoc-3-build-image.sh`](examples/04-buoc-3-build-image.sh)
 
 - `-t todo-image`: Đặt tên cho image
 - `.`: Chỉ định Dockerfile ở thư mục hiện tại
 
+> **Tóm gọn 1 câu:** Lệnh `docker build -t todo-image .` đọc công thức ở thư mục hiện tại và đóng gói thành image tên `todo-image`.
+
 ### Bước 4: Chạy container lần đầu
 
-```bash
-docker run -dp 3000:3000 todo-image
-```
+> 📄 **Code ví dụ:** [`examples/05-buoc-4-chay-container-lan-au.sh`](examples/05-buoc-4-chay-container-lan-au.sh)
 
 - `-d`: Chạy ở chế độ background (detached)
 - `-p 3000:3000`: Map port 3000 trên host với port 3000 trong container
 
 Mở trình duyệt truy cập `http://localhost:3000` để thấy ứng dụng Todo đang chạy.
+
+> **Tóm gọn 1 câu:** `docker run -dp 3000:3000 todo-image` khởi động app ở background, mở `localhost:3000` là thấy thành quả.
 
 ---
 
@@ -177,50 +161,24 @@ Mở trình duyệt truy cập `http://localhost:3000` để thấy ứng dụng
 
 ### Các lệnh cơ bản
 
-```bash
-# Xem danh sách container đang chạy
-docker ps
-
-# Xem tất cả container (bao gồm đã dừng)
-docker ps -a
-
-# Xem danh sách image
-docker image ls
-```
+> 📄 **Code ví dụ:** [`examples/06-cac-lenh-co-ban.sh`](examples/06-cac-lenh-co-ban.sh)
 
 ### Start / Stop / Xóa container
 
-```bash
-# Dừng container
-docker stop <container-id>
-
-# Khởi động lại container đã dừng
-docker start <container-id>
-
-# Xóa container
-docker rm <container-id>
-```
+> 📄 **Code ví dụ:** [`examples/07-start-stop-xoa-container.sh`](examples/07-start-stop-xoa-container.sh)
 
 > 💡 **Mẹo:** Bạn có thể dùng tên image hoặc container name thay vì ID. Khi tạo container bằng `docker run`, có thể thêm `--name` để đặt tên:
 > ```bash
 > docker run -dp 3000:3000 --name todo-app todo-image
 > ```
 
+> **Tóm gọn 1 câu:** Đặt `--name` ngay từ đầu để sau này start/stop/xóa theo tên dễ nhớ, khỏi phải tra ID.
+
 ### Cập nhật ứng dụng (Rebuild container)
 
 Khi thay đổi source code, bạn cần rebuild image và tạo container mới:
 
-```bash
-# 1. Dừng và xóa container cũ
-docker stop todo-app
-docker rm todo-app
-
-# 2. Rebuild image
-docker build -t todo-image .
-
-# 3. Tạo container mới
-docker run -dp 3000:3000 --name todo-app todo-image
-```
+> 📄 **Code ví dụ:** [`examples/08-cap-nhat-ung-dung-rebuild-container.sh`](examples/08-cap-nhat-ung-dung-rebuild-container.sh)
 
 > 🔍 Kiểm tra log của container:
 > ```bash
@@ -228,43 +186,23 @@ docker run -dp 3000:3000 --name todo-app todo-image
 > docker logs -f <container-id>  # Theo dõi log real-time
 > ```
 
+> **Tóm gọn 1 câu:** Đổi code = rebuild image + chạy container mới; log thì xem bằng `docker logs -f` để soi lỗi ngay.
+
 ---
 
 ## Part 3: Thao tác với Docker Hub
 
-> **Docker Hub** là kho lưu trữ image trực tuyến, nơi bạn có thể chia sẻ và tải về các Docker image. Tương tự như GitHub nhưng dành cho Docker image.
+> **Docker Hub** là kho lưu trữ image trực tuyến, nơi bạn có thể chia sẻ và tải về các Docker image. Tương tự như GitHub nhưng dành cho Docker image. Phần này dạy bạn cách đẩy image của mình lên đó và kéo image của người khác về chạy.
 
 ### Bước 1: Đăng nhập / Đăng xuất Docker Hub
 
-```bash
-# Đăng nhập Docker Hub
-docker login
-
-# Đăng nhập với username cụ thể
-docker login -u <your-username>
-
-# Đăng nhập bằng Access Token (an toàn hơn password)
-echo "<your-access-token>" | docker login -u <your-username> --password-stdin
-
-# Đăng xuất
-docker logout
-```
+> 📄 **Code ví dụ:** [`examples/09-buoc-1-ang-nhap-ang-xuat-docker-hub.sh`](examples/09-buoc-1-ang-nhap-ang-xuat-docker-hub.sh)
 
 > 💡 **Lưu ý:** Docker Desktop có thể tự duy trì session đăng nhập. Dùng `docker logout` để xóa thông tin đăng nhập trên máy.
 
 ### Bước 2: Tạo & Tag Image
 
-```bash
-# Build image với tên và tag
-docker build -t todo-image:1.0 .
-
-# Tag image với namespace Docker Hub
-docker tag todo-image:1.0 <your-username>/docker-tutorial:1.0
-
-# Tag nhiều tag khác nhau cho cùng 1 image
-docker tag todo-image:1.0 <your-username>/docker-tutorial:latest
-docker tag todo-image:1.0 <your-username>/docker-tutorial:1.0.1
-```
+> 📄 **Code ví dụ:** [`examples/10-buoc-2-tao-tag-image.sh`](examples/10-buoc-2-tao-tag-image.sh)
 
 **Quy tắc đặt tên image cho Docker Hub:**
 
@@ -276,127 +214,45 @@ docker tag todo-image:1.0 <your-username>/docker-tutorial:1.0.1
 | `<username>/<repo>:<tag>` | Version cụ thể |
 | `<username>/<repo>:latest` | Tag mặc định (latest) |
 
+> **Cách đọc bảng này:** Cột "Format" là cách viết tên image, cột "Ý nghĩa" cho biết nó trỏ tới đâu. Tên luôn có dạng `ai-đó/tên-repo`, thêm `:tag` nếu muốn chỉ định version.
+
+> **Tóm gọn 1 câu:** Tên image trên Hub luôn là `<username>/<repo>`, thêm `:tag` nếu muốn đóng dấu version.
+
 ### Bước 3: Push Image lên Docker Hub
 
-```bash
-# Push image với tag cụ thể
-docker push <your-username>/docker-tutorial:1.0
-
-# Push image latest
-docker push <your-username>/docker-tutorial:latest
-
-# Push tất cả các tag của cùng 1 repository
-docker push <your-username>/docker-tutorial --all-tags
-```
+> 📄 **Code ví dụ:** [`examples/11-buoc-3-push-image-len-docker-hub.sh`](examples/11-buoc-3-push-image-len-docker-hub.sh)
 
 ### Bước 4: Pull Image từ Docker Hub
 
-```bash
-# Pull image chính thức
-docker pull nginx
-docker pull nginx:alpine
-docker pull nginx:1.25
-
-# Pull image từ account cá nhân
-docker pull <your-username>/docker-tutorial:1.0
-
-# Pull image latest (mặc định)
-docker pull <your-username>/docker-tutorial
-```
+> 📄 **Code ví dụ:** [`examples/12-buoc-4-pull-image-tu-docker-hub.sh`](examples/12-buoc-4-pull-image-tu-docker-hub.sh)
 
 ### Bước 5: Chạy image từ Docker Hub
 
 Bất kỳ ai cũng có thể chạy image của bạn:
 
-```bash
-docker run -dp 3000:3000 <your-username>/docker-tutorial:1.0
-```
+> 📄 **Code ví dụ:** [`examples/13-buoc-5-chay-image-tu-docker-hub.sh`](examples/13-buoc-5-chay-image-tu-docker-hub.sh)
 
 > 💡 Thử tại https://labs.play-with-docker.com/ - mở port 3000 và chạy lệnh trên!
 
 ### Tìm kiếm Image trên Docker Hub
 
-```bash
-# Tìm image theo tên
-docker search nginx
-
-# Tìm image và giới hạn kết quả
-docker search --limit 5 nginx
-
-# Tìm image theo số stars
-docker search --filter stars=100 nginx
-
-# Tìm official image only
-docker search --filter is-official=true nginx
-
-# Tìm image có Automated build
-docker search --filter is-automated=true nginx
-```
+> 📄 **Code ví dụ:** [`examples/14-tim-kiem-image-tren-docker-hub.sh`](examples/14-tim-kiem-image-tren-docker-hub.sh)
 
 ### Quản lý Remote Image
 
-```bash
-# Xem chi tiết image (bao gồm size, layers, tags)
-docker image inspect <your-username>/docker-tutorial:1.0
-
-# Xem history (các layers) của image
-docker history <your-username>/docker-tutorial:1.0
-
-# Xóa local image sau khi push
-docker image rm <your-username>/docker-tutorial:1.0
-
-# Dọn dẹp các image không sử dụng (dangling images)
-docker image prune
-
-# Dọn dẹp TẤT CẢ image không sử dụng
-docker image prune -a
-
-# Xóa image local theo ID
-docker image rm <image-id>
-```
+> 📄 **Code ví dụ:** [`examples/15-quan-ly-remote-image.sh`](examples/15-quan-ly-remote-image.sh)
 
 ### Xem thông tin về repository
 
-```bash
-# Xem tất cả image của bạn
-docker image ls
-
-# Filter image theo repository
-docker image ls <your-username>/docker-tutorial
-
-# Filter theo tag
-docker image ls --filter reference=<your-username>/docker-tutorial:*
-
-# Format output
-docker image ls --format "{{.Repository}}:{{.Tag}} - {{.Size}}"
-```
+> 📄 **Code ví dụ:** [`examples/16-xem-thong-tin-ve-repository.sh`](examples/16-xem-thong-tin-ve-repository.sh)
 
 ### Multi-Architecture Build (Multi-Platform)
 
-```bash
-# Tạo builder hỗ trợ buildx (multi-platform)
-docker buildx create --name mybuilder --use
-docker buildx inspect --bootstrap
-
-# Build image cho nhiều platform cùng lúc
-docker buildx build --platform linux/amd64,linux/arm64 \
-  -t <your-username>/docker-tutorial:1.0 . --push
-
-# Build và push
-docker buildx build --platform linux/amd64,linux/arm64 \
-  -t <your-username>/docker-tutorial:latest \
-  --push .
-```
+> 📄 **Code ví dụ:** [`examples/17-multi-architecture-build-multi-platform.sh`](examples/17-multi-architecture-build-multi-platform.sh)
 
 ### Docker Hub API (thông qua CLI)
 
-```bash
-# Tải image từ Docker Hub Registry API
-curl -s "https://hub.docker.com/v2/repositories/<your-username>/docker-tutorial/tags/" | jq
-
-# Xem thông tin repo
-curl -s "https://hub.docker.com/v2/repositories/<your-username>/docker-tutorial/" | jq
-```
+> 📄 **Code ví dụ:** [`examples/18-docker-hub-api-thong-qua-cli.sh`](examples/18-docker-hub-api-thong-qua-cli.sh)
 
 ### Best Practices khi sử dụng Docker Hub
 
@@ -406,6 +262,8 @@ curl -s "https://hub.docker.com/v2/repositories/<your-username>/docker-tutorial/
 4. **Kiểm tra vulnerability** — Docker Hub có tích hợp Docker Scout để scan vulnerabilities.
 5. **Automated Build** — Kết nối repository GitHub/GitLab để tự động build image khi có commit mới.
 
+> **Tóm gọn 1 câu:** Dùng tag cụ thể thay vì `latest`, đăng nhập bằng Access Token, và quét vulnerability trước khi share image.
+
 ---
 
 ## Part 4: Persist Data - Volumes
@@ -414,50 +272,25 @@ curl -s "https://hub.docker.com/v2/repositories/<your-username>/docker-tutorial/
 
 ### Sử dụng Named Volumes
 
-**Volume** là vùng nhớ lưu trữ bên ngoài container, được quản lý bởi Docker.
+**Volume** là vùng nhớ lưu trữ bên ngoài container, được quản lý bởi Docker. Hãy tưởng tượng như két sắt riêng ở ngoài phòng thuê: bạn đổi phòng (xóa container) thì đồ trong két vẫn còn nguyên.
 
-```bash
-# Bước 1: Tạo volume
-docker volume create todo-mysql-data
-
-# Bước 2: Chạy container với volume được mount
-docker run -dp 3000:3000 \
-  --mount type=volume,src=todo-mysql-data,target=/var/lib/mysql \
-  todo-image
-
-# Bước 3: Kiểm tra thông tin volume
-docker volume inspect todo-mysql-data
-```
+> 📄 **Code ví dụ:** [`examples/19-su-dung-named-volumes.sh`](examples/19-su-dung-named-volumes.sh)
 
 > 💡 Bây giờ dù bạn có xóa container và tạo lại, data vẫn được giữ nguyên vì nó nằm trong volume.
 
+> **Tóm gọn 1 câu:** Named volume là két sắt ngoài container — container chết bao nhiêu lần data vẫn sống.
+
 ### Quản lý Volume
 
-```bash
-# Liệt kê tất cả volumes
-docker volume ls
-
-# Xem chi tiết volume (mountpoint, driver, size...)
-docker volume inspect todo-mysql-data
-
-# Xóa volume (chỉ khi chắc chắn không cần data)
-docker volume rm todo-mysql-data
-
-# Xóa các volume không còn được container nào dùng
-docker volume prune
-
-# Xóa MỌI volume không dùng (⚠️ bao gồm cả data cũ, không hỏi lại)
-docker volume prune -a
-
-# Xóa volume khi dừng compose stack (⚠️ mất data!)
-docker compose down -v
-```
+> 📄 **Code ví dụ:** [`examples/20-quan-ly-volume.sh`](examples/20-quan-ly-volume.sh)
 
 > ⚠️ **Cẩn thận với `prune`:** `docker volume prune` chỉ xóa volume **anonymous** và volume không được container nào tham chiếu. Nhưng nếu bạn quên gắn volume vào container trong lần chạy sau, data vẫn tồn tại — đến khi bạn chạy `prune -a` thì mất hẳn. Trước khi prune, luôn kiểm tra lại bằng `docker volume ls`.
 
+> **Tóm gọn 1 câu:** `prune` là cây chổi quét sạch volume "mồ côi" — luôn chạy `docker volume ls` để soát trước khi quét.
+
 ### Anonymous Volumes vs Named Volumes
 
-Có **2 loại volume**:
+Mục này so sánh hai loại volume để bạn biết khi nào dùng loại nào. Có **2 loại volume**:
 
 | | Anonymous Volume | Named Volume |
 |---|---|---|
@@ -467,21 +300,13 @@ Có **2 loại volume**:
 | Dọn dẹp | Tự xóa khi dùng `--rm` với container | Phải xóa thủ công / bằng `prune` |
 | Khi nào dùng | Container tạm, cache build (ví dụ `/app/node_modules`) | Dữ liệu cần giữ lâu dài (database, uploads) |
 
-```bash
-# Anonymous volume: không có tên bên trái dấu ":"
-docker run -d -v /var/lib/mysql mysql:8.0
+> **Cách đọc bảng này:** Soi theo cột "Khi nào dùng" là quyết định nhanh nhất: dữ liệu tạm thì anonymous, dữ liệu cần giữ thì named.
 
-# Named volume: có tên bên trái
-docker run -d -v todo-mysql-data:/var/lib/mysql mysql:8.0
-```
+> **Tóm gọn 1 câu:** Anonymous volume cho đồ tạm (cache), named volume cho đồ quý (database) — tên dễ đọc nên dễ quản.
 
-```bash
-# Xem anonymous volumes "rác" tích tụ theo thời gian
-docker volume ls --filter dangling=true
+> 📄 **Code ví dụ:** [`examples/21-anonymous-volumes-vs-named-volumes.sh`](examples/21-anonymous-volumes-vs-named-volumes.sh)
 
-# Dọn rác anonymous volumes
-docker volume prune
-```
+> 📄 **Code ví dụ:** [`examples/22-anonymous-volumes-vs-named-volumes.sh`](examples/22-anonymous-volumes-vs-named-volumes.sh)
 
 > 💡 **Mẹo:** Trong Dockerfile, mỗi `VOLUME /path` khai báo cũng tạo anonymous volume mỗi lần chạy container. Vì vậy nên khai báo volume ở tầng `compose.yaml` hoặc `docker run`, ít khai báo trong Dockerfile.
 
@@ -491,28 +316,11 @@ Volume không nằm trong container nên xóa container không mất data — nh
 
 **Backup:**
 
-```bash
-# Mount volume vào /data (ro) và thư mục hiện tại vào /backup, rồi nén tar
-docker run --rm \
-  -v todo-mysql-data:/data:ro \
-  -v "$(pwd)":/backup \
-  alpine \
-  tar czf /backup/todo-mysql-data-backup.tar.gz -C /data .
-
-# Kết quả: file todo-mysql-data-backup.tar.gz trong thư mục hiện tại
-ls -lh todo-mysql-data-backup.tar.gz
-```
+> 📄 **Code ví dụ:** [`examples/23-backup-restore-volume-voi-tar.sh`](examples/23-backup-restore-volume-voi-tar.sh)
 
 **Restore:**
 
-```bash
-# Tạo volume trống rồi giải nén backup vào
-docker run --rm \
-  -v todo-mysql-data:/data \
-  -v "$(pwd)":/backup:ro \
-  alpine \
-  tar xzf /backup/todo-mysql-data-backup.tar.gz -C /data
-```
+> 📄 **Code ví dụ:** [`examples/24-backup-restore-volume-voi-tar.sh`](examples/24-backup-restore-volume-voi-tar.sh)
 
 **Giải thích:**
 
@@ -523,6 +331,8 @@ docker run --rm \
 | `-v "$(pwd)":/backup` | Map thư mục host để lưu file tar |
 | `tar czf ... -C /data .` | Nén toàn bộ nội dung volume vào file tar |
 
+> **Cách đọc bảng này:** Mỗi dòng giải thích một mảnh trong lệnh backup. Hiểu nôm na: container tạm "cầm" volume ở tay này (`/data`, chỉ đọc) và túi đựng file tar ở tay kia (`/backup`).
+
 > 💡 Với MySQL, cách backup "đúng chuẩn" hơn là dùng `mysqldump` trong container để xuất file `.sql`:
 > ```bash
 > docker exec <mysql-container-id> \
@@ -530,21 +340,17 @@ docker run --rm \
 > ```
 > Cách tar volume phù hợp backup "nguyên trạng" mọi loại data (không chỉ database).
 
+> **Tóm gọn 1 câu:** Backup = cho container tạm đọc volume và nén ra file tar trên host; restore làm ngược lại.
+
 ---
 
 ## Part 5: Dev Mode - Bind Mounts
 
-> Khi developing, bạn không muốn phải rebuild image mỗi lần thay đổi code. **Bind Mount** cho phép map thư mục source code từ host vào container.
+> Khi developing, bạn không muốn phải rebuild image mỗi lần thay đổi code. **Bind Mount** cho phép map thư mục source code từ host vào container. Nôm na: thay vì photocopier code vào hộp container, bạn mở một "cửa sổ" thông giữa hai nhà — sửa file bên nhà host, bên container thấy ngay.
 
 ### Chạy với Bind Mount
 
-```bash
-docker run -dp 127.0.0.1:3000:3000 \
-  -w /app \
-  -v "$(pwd):/app" \
-  node:22-alpine \
-  sh -c "yarn install && yarn run dev"
-```
+> 📄 **Code ví dụ:** [`examples/25-chay-voi-bind-mount.sh`](examples/25-chay-voi-bind-mount.sh)
 
 **Giải thích:**
 
@@ -554,20 +360,17 @@ docker run -dp 127.0.0.1:3000:3000 \
 | `-v "$(pwd):/app"` | Map thư mục hiện tại host vào `/app` trong container |
 | `sh -c "yarn install && yarn run dev"` | Cài dependencies và chạy dev server |
 
+> **Cách đọc bảng này:** Mỗi dòng là một flag trong lệnh `docker run`. Ba mảnh ghép lại: chọn chỗ làm việc (`-w`), nối thư mục code (`-v`), rồi ra lệnh chạy (`sh -c`).
+
 > 💡 Với bind mount, mỗi khi bạn edit code trên host, container sẽ tự động update (qua nodemon). Chỉ cần refresh trình duyệt!
+
+> **Tóm gọn 1 câu:** Bind mount nối thư mục code host vào container, nên sửa code là app tự cập nhật, khỏi rebuild.
 
 ### Bind Mount flags: `:ro`, `:rw`, `:z`, `:Z`
 
 Bạn có thể thêm **options** vào cuối bind mount (sau dấu `:` thứ hai), cách nhau bằng dấu phẩy:
 
-```bash
-# :ro (read-only) — container chỉ ĐỌC, không ghi được vào thư mục host
-# Hữu ích khi mount config, static assets, hoặc khi muốn "đảm bảo" container không phá code
-docker run -d -v "$(pwd)/config:/etc/app/config:ro" my-app
-
-# :rw (read-write) — mặc định, có thể ghi lẫn nhau
-docker run -d -v "$(pwd):/app:rw" my-app
-```
+> 📄 **Code ví dụ:** [`examples/26-bind-mount-flags-ro-rw-z-z.sh`](examples/26-bind-mount-flags-ro-rw-z-z.sh)
 
 **SELinux labels (dành cho Fedora/RHEL/CentOS — host có SELinux enforcing):**
 
@@ -576,41 +379,25 @@ docker run -d -v "$(pwd):/app:rw" my-app
 | `:z` | Gắn label SELinux **shared**: nhiều container có thể mount cùng nội dung này |
 | `:Z` | Gắn label SELinux **private**: CHỈ container hiện tại được dùng nội dung này |
 
-```bash
-# Trên Fedora/RHEL, nếu không có :z/:Z container sẽ bị "Permission denied"
-docker run -d -v "$(pwd):/app:z" my-app
-```
+> **Cách đọc bảng này:** Chỉ cần phân biệt `z` (chia sẻ cho nhiều container) và `Z` (độc quyền cho một container). Hai flag còn lại (`:ro`, `:rw`) là chuyện đọc hay ghi, khác hẳn chuyện SELinux.
+
+> 📄 **Code ví dụ:** [`examples/27-bind-mount-flags-ro-rw-z-z.sh`](examples/27-bind-mount-flags-ro-rw-z-z.sh)
 
 > 💡 Trên macOS và hầu hết môi trường dev (Ubuntu không bật SELinux enforcing) bạn không cần `:z`/`:Z`. Nhưng nếu tutorial/CI của bạn chạy trên Fedora, RHEL, CentOS — nhớ thêm flag này, lỗi `Permission denied` khi bind mount gần như luôn do SELinux.
 >
 > ⚠️ `:Z` re-label toàn bộ thư mục host — đừng dùng với thư mục hệ thống như `$HOME`.
 
+> **Tóm gọn 1 câu:** Thêm `:ro` để chỉ đọc, `:z`/`:Z` chỉ cần khi host dùng SELinux (Fedora/RHEL/CentOS).
+
 ### Các dạng đường dẫn của bind mount
 
-```bash
-# Đường dẫn tuyệt đối
-docker run -v /home/son/project:/app my-app
-
-# Đường dẫn tương đối so với thư mục hiện tại (khuyến nghị trong script)
-docker run -v "$(pwd):/app" my-app
-
-# Trong compose.yaml: "./" = thư mục chứa file compose.yaml
-volumes:
-  - ./:/app
-  - ./src:/app/src:ro   # chỉ đọc source, container không ghi đè được
-```
+> 📄 **Code ví dụ:** [`examples/28-cac-dang-uong-dan-cua-bind-mount.sh`](examples/28-cac-dang-uong-dan-cua-bind-mount.sh)
 
 ### Lỗi phổ biến với bind mount + Node.js
 
 Khi bind mount `./:/app`, thư mục `node_modules` trên host (rỗng hoặc thiếu) sẽ **che** mất `node_modules` trong container. Cách xử lý kinh điển — dùng anonymous volume "chặn" riêng:
 
-```bash
-docker run -dp 127.0.0.1:3000:3000 \
-  -v "$(pwd):/app" \
-  -v /app/node_modules \
-  node:22-alpine \
-  sh -c "yarn install && yarn run dev"
-```
+> 📄 **Code ví dụ:** [`examples/29-loi-pho-bien-voi-bind-mount-node-js.sh`](examples/29-loi-pho-bien-voi-bind-mount-node-js.sh)
 
 Volume thứ hai (anonymous) giữ `node_modules` của container, không bị bind mount từ host đè lên. Xóa container kèm `--rm` sẽ dọn anonymous volume này.
 
@@ -623,17 +410,21 @@ Volume thứ hai (anonymous) giữ `node_modules` của container, không bị b
 | Khi nào dùng | Dữ liệu production (database), chia sẻ giữa container | Dev mode (live-reload code), mount config |
 | Backup | Phải tar/export (xem Part 4) | Trực tiếp trên host |
 
+> **Cách đọc bảng này:** Chạy thẳng tới hai dòng cuối — "Khi nào dùng" và "Backup" — để chọn nhanh: dữ liệu production dùng named volume, code dev dùng bind mount.
+
+> **Cách đọc bảng này:** Soi dòng "Khi nào dùng" để ra quyết định: volume cho data production, bind mount cho code khi dev. Các dòng còn lại giải thích lý do.
+
+> **Tóm gọn 1 câu:** Named volume cho data production, bind mount cho code dev; gặp lỗi `node_modules` thì dùng anonymous volume chặn riêng.
+
 ### Xem log real-time
 
-```bash
-docker logs -f <container-id>
-```
+> 📄 **Code ví dụ:** [`examples/30-xem-log-real-time.sh`](examples/30-xem-log-real-time.sh)
 
 ---
 
 ## Part 6: Multi-container - Networking
 
-> Một ứng dụng thực tế thường có nhiều services: App Server + Database + Cache. Mỗi service nên chạy trong một container riêng.
+> Một ứng dụng thực tế thường có nhiều services: App Server + Database + Cache. Mỗi service nên chạy trong một container riêng. Phần này dạy bạn nối các container đó lại với nhau qua **network** — giống như cấp chung một mạng wifi cho các thiết bị trong nhà để chúng gọi nhau được.
 
 ### Kiến trúc Todo App
 
@@ -652,22 +443,11 @@ docker logs -f <container-id>
 
 ### Bước 1: Tạo Network
 
-```bash
-docker network create todo-network
-docker network ls
-```
+> 📄 **Code ví dụ:** [`examples/31-buoc-1-tao-network.sh`](examples/31-buoc-1-tao-network.sh)
 
 ### Bước 2: Chạy MySQL container trên network
 
-```bash
-docker run -d \
-  --network todo-network \
-  --network-alias mysql \
-  -v todo-mysql-data:/var/lib/mysql \
-  -e MYSQL_ROOT_PASSWORD=secret \
-  -e MYSQL_DATABASE=todos \
-  mysql:8.0
-```
+> 📄 **Code ví dụ:** [`examples/32-buoc-2-chay-mysql-container-tren-network.sh`](examples/32-buoc-2-chay-mysql-container-tren-network.sh)
 
 **Giải thích:**
 
@@ -679,53 +459,31 @@ docker run -d \
 | `-e MYSQL_ROOT_PASSWORD=secret` | Đặt root password cho MySQL |
 | `-e MYSQL_DATABASE=todos` | Tự tạo database "todos" khi start |
 
+> **Cách đọc bảng này:** Mỗi dòng là một flag của lệnh `docker run` cho MySQL. Quan trọng nhất: `--network` (nhập mạng chung) và `--network-alias` (đặt tên để gọi).
+
 ### Bước 3: Verify MySQL
 
-```bash
-# Vào terminal của MySQL container
-docker exec -it <mysql-container-id> mysql -u root -p
-# Nhập password: secret
-```
+> 📄 **Code ví dụ:** [`examples/33-buoc-3-verify-mysql.sh`](examples/33-buoc-3-verify-mysql.sh)
 
-```sql
--- Trong MySQL shell
-SHOW DATABASES;
-USE todos;
-SHOW TABLES;
-```
+> 📄 **Code ví dụ:** [`examples/34-buoc-3-verify-mysql.sql`](examples/34-buoc-3-verify-mysql.sql)
 
 ### Bước 4: Chạy App kết nối với MySQL
 
-```bash
-docker run -dp 127.0.0.1:3000:3000 \
-  -w /app \
-  -v "$(pwd):/app" \
-  --network todo-network \
-  -e MYSQL_HOST=mysql \
-  -e MYSQL_USER=root \
-  -e MYSQL_PASSWORD=secret \
-  -e MYSQL_DB=todos \
-  todo-image \
-  sh -c "yarn install && yarn run dev"
-```
+> 📄 **Code ví dụ:** [`examples/35-buoc-4-chay-app-ket-noi-voi-mysql.sh`](examples/35-buoc-4-chay-app-ket-noi-voi-mysql.sh)
 
 > 💡 **Lưu ý:** `MYSQL_HOST=mysql` dùng alias thay vì IP. Docker DNS sẽ tự động resolve tên `mysql` sang IP của MySQL container.
 
 ### Bước 5 (Tùy chọn): Kiểm tra DNS trong network
 
-```bash
-# Chạy container netshoot để tra cứu DNS
-docker run -it --network todo-network nicolaka/netshoot
+> 📄 **Code ví dụ:** [`examples/36-buoc-5-tuy-chon-kiem-tra-dns-trong.sh`](examples/36-buoc-5-tuy-chon-kiem-tra-dns-trong.sh)
 
-# Trong netshoot container
-dig mysql
-```
+> **Tóm gọn 1 câu:** Tạo network chung, chạy MySQL và app vào cùng mạng đó; app gọi MySQL bằng tên alias, Docker DNS lo phần tìm IP.
 
 ---
 
 ## Part 7: Docker Compose (Compose Specification)
 
-> Quản lý nhiều container bằng lệnh `docker run` riêng lẻ rất rườm rà. **Docker Compose** cho phép định nghĩa toàn bộ multi-container application trong một file YAML.
+> Quản lý nhiều container bằng lệnh `docker run` riêng lẻ rất rườm rà. **Docker Compose** cho phép định nghĩa toàn bộ multi-container application trong một file YAML. Hãy tưởng tượng: thay vì chạy từng lệnh một cho mỗi container, bạn viết cả "kịch bản dàn diễn" vào một file rồi ra một lệnh duy nhất là cả nhóm lên sân khấu.
 
 ### Docker Compose v2/v5 — Điểm gì đã thay đổi?
 
@@ -737,7 +495,11 @@ Docker Compose có ba giai đoạn:
 | **Compose v2** (2020–2025) | `docker compose` (Go) | **Compose Specification** (rolling) | `version:` field **obsolete/warning** |
 | **Compose v5** (12/2025–nay) | `docker compose` (Go + SDK) | **Compose Specification** (rolling) | Thêm Go SDK, hỗ trợ Jobs (manual) |
 
+> **Cách đọc bảng này:** Ba dòng là ba thời kỳ của Compose. Chỉ cần nhớ: dòng v1 là quá khứ cần bỏ, hai dòng còn lại dùng chung chuẩn Compose Specification hiện tại.
+
 > ⚠️ **`version:` trong file YAML là obsolete.** Kể từ Compose v2 (2020), trường top-level `version` không còn có ý nghĩa chọn schema — Compose luôn dùng spec mới nhất. Nếu dùng, bạn sẽ nhận **warning**: `'version' is obsolete`. Khuyến nghị: **xóa hoàn toàn** dòng `version: "3.x"` khỏi file.
+
+> **Tóm gọn 1 câu:** Compose v1 đã chết, v2/v5 dùng chuẩn mới — và hãy xóa dòng `version:` khỏi file YAML vì nó chỉ gây warning.
 
 ### Tên file khuyến nghị: `compose.yaml`
 
@@ -750,7 +512,7 @@ Trong tutorial này ta dùng file **`compose.yaml`** — file thực tế của 
 
 ### Docker Compose hoạt động như thế nào?
 
-Docker Compose không chỉ đơn giản là "gộp" nhiều container lại — nó còn **tự động tạo một network riêng** để tất cả các services trong file `compose.yaml` có thể giao tiếp với nhau.
+Mục này giải thích "phép màu" đằng sau Compose. Docker Compose không chỉ đơn giản là "gộp" nhiều container lại — nó còn **tự động tạo một network riêng** để tất cả các services trong file `compose.yaml` có thể giao tiếp với nhau.
 
 **Ví dụ kiến trúc 3-tier với Docker Compose:**
 
@@ -769,55 +531,17 @@ Docker Compose không chỉ đơn giản là "gộp" nhiều container lại —
 
 Ví dụ file `compose.yaml` cho kiến trúc 3-tier (Compose Specification, **không có** `version:`):
 
-```yaml
-# compose.yaml — Compose Specification (Docker Compose v2/v5)
-# LƯU Ý: KHÔNG khai báo "version:" nữa — field này đã obsolete từ 2020.
-
-services:
-  frontend:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-    networks:
-      - app-network
-
-  backend:
-    build: ./backend
-    environment:
-      DB_HOST: database    # ← Kết nối đến DB qua tên service
-      DB_PORT: 5432
-    networks:
-      - app-network
-
-  database:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: myapp
-      POSTGRES_PASSWORD: secret
-    volumes:
-      - db-data:/var/lib/postgresql/data
-    networks:
-      - app-network
-
-networks:
-  app-network:         # ← Compose tự tạo network này
-    driver: bridge
-
-volumes:
-  db-data:
-```
+> 📄 **Code ví dụ:** [`examples/37-docker-compose-hoat-ong-nhu-the-nao.yaml`](examples/37-docker-compose-hoat-ong-nhu-the-nao.yaml)
 
 > 💡 **Điểm quan trọng:** Trong Docker Compose, mỗi service có thể gọi nhau bằng **tên service** (ví dụ: `DB_HOST: database`). Compose tự động tạo DNS record cho mỗi service trong network. Bạn **không cần tạo network thủ công** bằng `docker network create` nữa!
+
+> **Tóm gọn 1 câu:** Compose tự lập network và sổ địa chỉ (DNS) cho các service — chúng gọi nhau bằng tên, bạn khỏi cần tạo network tay.
 
 ### `docker compose up` chạy gì?
 
 `docker compose up` sẽ **chạy TOÀN BỘ group container** được định nghĩa trong file `compose.yaml` cùng lúc:
 
-```bash
-docker compose up          # Chạy tất cả services
-docker compose up -d       # Chạy tất cả services ở chế độ background
-docker compose up frontend # Chỉ chạy service frontend
-```
+> 📄 **Code ví dụ:** [`examples/38-docker-compose-up-chay-gi.sh`](examples/38-docker-compose-up-chay-gi.sh)
 
 Khi chạy `docker compose up`, Docker sẽ:
 
@@ -827,37 +551,19 @@ Khi chạy `docker compose up`, Docker sẽ:
 4. **Khởi chạy tất cả containers** — Theo thứ tự phụ thuộc (DB chạy trước BE, BE chạy trước FE...)
 5. **Kết nối vào network** — Tất cả containers đều có thể gọi nhau qua tên service
 
-```bash
-# Dừng TOÀN BỘ group container
-docker compose down
-```
+> **Tóm gọn 1 câu:** `docker compose up` là "một lệnh ra tất cả": tự build/pull image, lập network, tạo volume, rồi khởi động đủ cả nhóm container.
+
+> 📄 **Code ví dụ:** [`examples/39-docker-compose-up-chay-gi.sh`](examples/39-docker-compose-up-chay-gi.sh)
 
 ### So sánh: Tự quản lý vs Docker Compose
 
 **Cách truyền thống (không dùng Compose):**
 
-```bash
-# Phải chạy 3 lệnh riêng lẻ, mỗi lệnh tạo 1 container
-docker network create my-network
-
-docker run -d --name database --network my-network \
-  -e POSTGRES_DB=myapp -e POSTGRES_PASSWORD=secret \
-  postgres:15
-
-docker run -d --name backend --network my-network \
-  -e DB_HOST=database \
-  node-app
-
-docker run -d --name frontend --network my-network \
-  -p 80:80 nginx:alpine
-```
+> 📄 **Code ví dụ:** [`examples/40-so-sanh-tu-quan-ly-vs-docker-compose.sh`](examples/40-so-sanh-tu-quan-ly-vs-docker-compose.sh)
 
 **Cách dùng Docker Compose:**
 
-```bash
-# Chỉ cần 1 lệnh, chạy cả 3 containers
-docker compose up -d
-```
+> 📄 **Code ví dụ:** [`examples/41-so-sanh-tu-quan-ly-vs-docker-compose.sh`](examples/41-so-sanh-tu-quan-ly-vs-docker-compose.sh)
 
 | Tiêu chí | docker run truyền thống | Docker Compose |
 |----------|------------------------|----------------|
@@ -869,51 +575,15 @@ docker compose up -d
 | Cấu hình | Phải nhớ tất cả flags | Định nghĩa 1 lần trong YAML |
 | Reusability | Khó share | File YAML dễ share + version control |
 
+> **Cách đọc bảng này:** Soi từng dòng để thấy Compose thắng ở mọi tiêu chí: ít lệnh hơn, tự tạo network, tự sắp thứ tự, và file YAML dễ chia sẻ.
+
+> **Tóm gọn 1 câu:** Compose thay một đống lệnh `docker run` bằng một file YAML và một lệnh `up` — dễ nhớ, dễ share, dễ lặp lại.
+
 ### File compose.yaml của project
 
 File `compose.yaml` trong project được dùng để chạy Todo App + MySQL. So với version đơn giản phía trên, file thực tế thêm `name:` (tránh trùng tên project), `healthcheck` cho MySQL và `depends_on: condition: service_healthy` (app chỉ start khi MySQL sẵn sàng):
 
-```yaml
-# compose.yaml — Compose Specification (Docker Compose v2/v5)
-# ⚠️ KHÔNG có "version: 2.x" hay "version: 3.x" — chỉ dùng Compose Specification
-
-name: todo-app
-
-services:
-  application:
-    image: todo-image
-    command: sh -c "yarn install && yarn run dev"
-    ports:
-      - 127.0.0.1:3000:3000
-    working_dir: /app
-    volumes:
-      - ./:/app
-    environment:
-      MYSQL_HOST: mysql
-      MYSQL_USER: root
-      MYSQL_PASSWORD: secret
-      MYSQL_DB: todos
-    depends_on:
-      mysql:
-        condition: service_healthy
-
-  mysql:
-    image: mysql:8.0
-    volumes:
-      - todo-mysql-data:/var/lib/mysql
-    environment:
-      MYSQL_ROOT_PASSWORD: secret
-      MYSQL_DATABASE: todos
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "--password=secret"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 30s
-
-volumes:
-  todo-mysql-data:
-```
+> 📄 **Code ví dụ:** [`examples/42-file-compose-yaml-cua-project.yaml`](examples/42-file-compose-yaml-cua-project.yaml)
 
 **Giải thích cấu trúc:**
 
@@ -923,58 +593,23 @@ volumes:
 | `depends_on.condition: service_healthy` | App chỉ start khi service `mysql` có healthcheck trả về **healthy** (không phải chờ `mysql` "bật lên" rồi crash ngay vì chưa sẵn sàng) |
 | `healthcheck` | Kiểm tra MySQL bằng `mysqladmin ping` mỗi 5 giây, timeout 3s, thử 10 lần, chờ 30s khởi tạo trước khi đếm |
 
+> **Cách đọc bảng này:** Ba dòng là ba nâng cấp so với file ví dụ đơn giản phía trên: đặt tên project, chờ DB "khỏe" rồi mới chạy app, và cách kiểm tra sức khỏe DB.
+
+> **Tóm gọn 1 câu:** File thật thêm `name:`, `healthcheck` và `depends_on: service_healthy` để app chỉ khởi động khi MySQL thực sự sẵn sàng.
+
 ### Các lệnh Docker Compose (v2/v5)
 
-```bash
-# Khởi động tất cả services (background mode)
-docker compose up -d
-
-# Xem logs tất cả services
-docker compose logs -f
-
-# Dừng tất cả services
-docker compose down
-
-# Dừng và xóa cả volumes (⚠️ xóa data!)
-docker compose down -v
-
-# Xem danh sách services đang chạy
-docker compose ps
-
-# Rebuild và restart service
-docker compose up -d --build
-
-# Chạy lệnh trong service
-docker compose exec application sh
-
-# Validate file compose.yaml (kiểm tra lỗi syntax)
-docker compose config
-
-# Xem cấu hình sau khi merge .env (compose v2.24+)
-docker compose config --format json
-```
+> 📄 **Code ví dụ:** [`examples/43-cac-lenh-docker-compose-v2-v5.sh`](examples/43-cac-lenh-docker-compose-v2-v5.sh)
 
 ### Compose Watch (tính năng mới — sync code real-time)
 
 Kể từ Compose v2.22, bạn có thể dùng `develop.watch` thay cho bind mount thủ công:
 
-```yaml
-services:
-  application:
-    build: .
-    develop:
-      watch:
-        - action: sync        # sync file thay đổi vào container
-          path: ./src
-          target: /app/src
-        - action: rebuild     # rebuild khi package.json thay đổi
-          path: ./package.json
-```
+> 📄 **Code ví dụ:** [`examples/44-compose-watch-tinh-nang-moi-sync-code-real.yaml`](examples/44-compose-watch-tinh-nang-moi-sync-code-real.yaml)
 
-```bash
-# Chạy với watch mode (auto sync code, không cần restart)
-docker compose watch
-```
+> 📄 **Code ví dụ:** [`examples/45-compose-watch-tinh-nang-moi-sync-code-real.sh`](examples/45-compose-watch-tinh-nang-moi-sync-code-real.sh)
+
+> **Tóm gọn 1 câu:** `develop.watch` đưa tính năng live-reload vào luôn file YAML — gọn hơn tự gõ flag bind mount.
 
 ### So sánh: docker run vs docker compose
 
@@ -985,11 +620,15 @@ docker compose watch
 | Khó tái sử dụng | Dễ tái sử dụng và share |
 | Phù hợp chạy nhanh/test | Phù hợp multi-service apps |
 
+> **Cách đọc bảng này:** Cột trái là `docker run` đơn lẻ, cột phải là Compose. Chọn nhanh: chạy thử 1 container thì dùng `docker run`, app nhiều service thì dùng Compose.
+
+> **Tóm gọn 1 câu:** `docker run` cho việc nhanh gọn một container, `docker compose` cho app nhiều service.
+
 ---
 
 ## Part 8: Multi-stage Builds
 
-> Vấn đề: Image production thường chứa cả build tools (yarn, gcc, dev dependencies...) không cần thiết → image to, chậm deploy, tăng bề mặt tấn công bảo mật. **Multi-stage builds** giải quyết bằng cách dùng nhiều `FROM` trong một Dockerfile.
+> Vấn đề: Image production thường chứa cả build tools (yarn, gcc, dev dependencies...) không cần thiết → image to, chậm deploy, tăng bề mặt tấn công bảo mật. **Multi-stage builds** giải quyết bằng cách dùng nhiều `FROM` trong một Dockerfile. Nôm na: như nấu ăn trong bếp đầy đủ dụng cụ, rồi chỉ bưng món thành phẩm ra bàn — khách không cần thấy cả căn bếp.
 
 ### Nguyên lý
 
@@ -1007,36 +646,7 @@ Mỗi `FROM` bắt đầu một **stage** mới. Bạn copy artifact từ stage 
 
 ### Dockerfile multi-stage cho Todo App (Node.js)
 
-```dockerfile
-# syntax=docker/dockerfile:1
-
-# ===== Stage 1: build =====
-FROM node:22-alpine AS build
-WORKDIR /app
-
-# Copy file manifest trước để tận dụng build cache
-COPY package*.json yarn.lock ./
-RUN yarn install --frozen-lockfile
-
-COPY . .
-
-# ===== Stage 2: production (chỉ chứa những gì cần để chạy) =====
-FROM node:22-alpine AS production
-WORKDIR /app
-
-ENV NODE_ENV=production
-
-# Chỉ copy node_modules production từ stage build
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/src ./src
-COPY package.json ./
-
-# Chạy bằng user non-root (bảo mật)
-USER node
-
-EXPOSE 3000
-CMD ["node", "src/index.js"]
-```
+> 📄 **Code ví dụ:** [`examples/46-dockerfile-multi-stage-cho-todo-app-node-js.dockerfile`](examples/46-dockerfile-multi-stage-cho-todo-app-node-js.dockerfile)
 
 **Kỹ thuật quan trọng:**
 
@@ -1048,18 +658,13 @@ CMD ["node", "src/index.js"]
 | `ENV NODE_ENV=production` | Chỉ cài production dependencies trong stage cuối |
 | Copy `package*.json` **trước** source | Tận dụng build cache — chỉ `yarn install` lại khi dependencies đổi |
 
+> **Cách đọc bảng này:** Mỗi dòng là một kỹ thuật trong Dockerfile multi-stage. Cặp quan trọng nhất: `FROM ... AS <tên>` để đặt tên stage, và `COPY --from=<tên>` để bưng artifact qua stage sau.
+
+> **Tóm gọn 1 câu:** Nhiều `FROM` = nhiều stage; bưng chỉ phần cần thiết từ stage build sang stage cuối, giữ image gọn và sạch.
+
 ### Build với stage cụ thể
 
-```bash
-# Build đến stage cuối (production)
-docker build -t todo-image:multi-stage .
-
-# Chỉ build đến stage "build" (dùng để debug / chạy test)
-docker build --target build -t todo-image:debug .
-
-# Kiểm tra build config theo best practices (BuildKit checks)
-docker build --check .
-```
+> 📄 **Code ví dụ:** [`examples/47-build-voi-stage-cu-the.sh`](examples/47-build-voi-stage-cu-the.sh)
 
 ### Lợi ích của multi-stage builds
 
@@ -1069,148 +674,41 @@ docker build --check .
 - ⚡ **Build song song**: các stage độc lập chạy parallel với BuildKit
 - 🧪 **Debug dễ dàng**: giữ nguyên stage `build`/`debug` riêng, không ảnh hưởng production
 
+> **Tóm gọn 1 câu:** Multi-stage build giúp image nhỏ hơn, an toàn hơn, không leak secret, và vẫn giữ chỗ debug riêng khi cần.
+
 ---
 
 ## Part 9: Docker Scout - Security Scanning
 
-> **Docker Scout** phân tích image và tạo **SBOM** (Software Bill of Materials), đối chiếu với cơ sở dữ liệu CVE cập nhật liên tục để phát hiện lỗ hổng bảo mật. Tích hợp sẵn trong Docker Desktop 4.23+ và Docker Hub.
+> **Docker Scout** phân tích image và tạo **SBOM** (Software Bill of Materials), đối chiếu với cơ sở dữ liệu CVE cập nhật liên tục để phát hiện lỗ hổng bảo mật. Tích hợp sẵn trong Docker Desktop 4.23+ và Docker Hub. Hiểu đơn giản: Scout như bác sĩ khám định kỳ cho image — nó liệt kê "hồ sơ bệnh án" (SBOM) rồi đối chiếu với danh sách "vi-rút" (CVE) mới nhất để báo bạn biết.
 
 ### Các lệnh Docker Scout cơ bản
 
-```bash
-# Tổng quan nhanh về vulnerability của image (dùng image build gần nhất nếu không chỉ định)
-docker scout quickview todo-image:multi-stage
-#   ✓ SBOM of image already cached, 187 packages indexed
-#   Your image  todo-image:multi-stage  │  0C  2H  8M  1L
-#   Base image  node:22-alpine          │  0C  0H  0M  0L
-
-# Liệt kê chi tiết CVEs
-docker scout cves todo-image:multi-stage
-
-# Chỉ hiện CVE có thể fix được
-docker scout cves --only-fixed todo-image:multi-stage
-
-# Lọc theo mức độ nghiêm trọng
-docker scout cves --only-severity critical,high todo-image:multi-stage
-
-# Lọc CVE theo package cụ thể (ví dụ express)
-docker scout cves --only-package express
-
-# Xuất SBOM của image
-docker scout sbom todo-image:multi-stage
-
-# Gợi ý update base image để giảm CVE
-docker scout recommendations todo-image:multi-stage
-
-# So sánh 2 image (trước/sau khi fix)
-docker scout compare todo-image:1.0 --to todo-image:2.0
-
-# Thoát mã 2 nếu có vulnerability (dùng trong CI/CD)
-docker scout cves --exit-code --only-severity critical,high todo-image:multi-stage
-```
+> 📄 **Code ví dụ:** [`examples/48-cac-lenh-docker-scout-co-ban.sh`](examples/48-cac-lenh-docker-scout-co-ban.sh)
 
 ### Xuất báo cáo (CI/CD integration)
 
-```bash
-# Xuất SARIF (tích hợp GitHub Code Scanning / GitLab)
-docker scout cves --format sarif --output report.sarif.json todo-image
-
-# Xuất SBOM định dạng SPDX
-docker scout sbom --format spdx todo-image > sbom.spdx.json
-```
+> 📄 **Code ví dụ:** [`examples/49-xuat-bao-cao-ci-cd-integration.sh`](examples/49-xuat-bao-cao-ci-cd-integration.sh)
 
 ### Enroll organization với Docker Scout (phân tích repo remote)
 
-```bash
-# Đăng ký organization với Docker Scout
-docker scout enroll <ORG_NAME>
-
-# Bật Docker Scout cho repository trên Docker Hub
-docker scout repo enable --org <ORG_NAME> <ORG_NAME>/docker-tutorial
-
-# Push image → Scout tự phân tích, cập nhật real-time khi có CVE mới
-docker push <your-username>/docker-tutorial:latest
-```
+> 📄 **Code ví dụ:** [`examples/50-enroll-organization-voi-docker-scout-phan-tich-repo.sh`](examples/50-enroll-organization-voi-docker-scout-phan-tich-repo.sh)
 
 > 💡 **Lưu ý:** Phân tích local bằng CLI/Docker Desktop không lưu data. Khi enable cho repository, Docker Scout lưu snapshot metadata và **tự động đánh giá lại** khi có CVE mới — không cần quét lại image.
+
+> **Tóm gọn 1 câu:** Docker Scout quét lỗ hổng trong image và, khi bật cho repository, tự re-check mỗi khi có CVE mới.
 
 ---
 
 ## Part 10: CI/CD với GitHub Actions
 
-> Tự động hóa: mỗi lần push code lên GitHub → build image → scan bảo mật → push lên registry. Tất cả chạy trong pipeline **GitHub Actions**, không cần làm thủ công.
+> Tự động hóa: mỗi lần push code lên GitHub → build image → scan bảo mật → push lên registry. Tất cả chạy trong pipeline **GitHub Actions**, không cần làm thủ công. Coi như bạn thuê một "robot trực ca": bạn đẩy code lên, robot tự làm nốt phần còn lại.
 
 ### Workflow hoàn chỉnh
 
 Tạo file `.github/workflows/docker.yml`:
 
-```yaml
-name: Docker Build & Scan
-
-on:
-  push:
-    branches: [main]
-    tags: ["v*"]
-  pull_request:
-    branches: [main]
-
-env:
-  REGISTRY: docker.io
-  IMAGE_NAME: ${{ github.repository }}   # vd: nbhson/docker-tutorial
-
-jobs:
-  build-scan-push:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      # 1. Lấy source code
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      # 2. Setup Buildx (bắt buộc để dùng cache type=gha và build-push-action)
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # 3. Đăng nhập Docker Hub (secrets cấu hình trong repo Settings → Secrets)
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      # 4. Build image (KHÔNG push ngay) + cache layer vào GitHub Actions cache
-      - name: Build image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          load: true
-          tags: ${{ env.IMAGE_NAME }}:ci
-          cache-from: type=gha          # 🔄 lấy cache từ các lần build trước
-          cache-to: type=gha,mode=max   # 🔄 lưu cache (cả intermediate layers)
-
-      # 5. Scan bảo mật — pipeline FAIL nếu có CVE critical/high
-      - name: Scan image với Docker Scout
-        run: |
-          docker scout cves ${{ env.IMAGE_NAME }}:ci \
-            --exit-code \
-            --only-severity critical,high
-
-      # 6. Push image (chỉ chạy khi push lên main hoặc tag)
-      - name: Push image
-        if: github.event_name == 'push'
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ env.IMAGE_NAME }}:latest
-            ${{ env.IMAGE_NAME }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-```
+> 📄 **Code ví dụ:** [`examples/51-workflow-hoan-chinh.yaml`](examples/51-workflow-hoan-chinh.yaml)
 
 ### Giải thích các điểm quan trọng
 
@@ -1224,20 +722,13 @@ jobs:
 | `secrets.DOCKERHUB_TOKEN` | Dùng **Access Token** của Docker Hub, không bao giờ commit username/password. Cấu hình tại repo Settings → Secrets and variables → Actions |
 | Tag `${{ github.sha }}` | Tag immutable theo commit hash — image production luôn trace được về đúng code đã build |
 
+> **Cách đọc bảng này:** Mỗi dòng là một mảnh trong file workflow. Ba mảnh đáng nhớ nhất: `build-push-action` làm việc nặng, `cache-from/to` giúp build nhanh, `--exit-code` của Scout chặn image lỗi.
+
 > 💡 **Chặn image lỗi nhưng không block cứng?** Ở giai đoạn đầu, có thể để bước Scout chỉ warning bằng cách thêm `continue-on-error: true`, sau đó turn thành fail cứng khi team đã quen xử lý CVE.
 
 ### Biến thể: push lên GitHub Container Registry (ghcr.io)
 
-```yaml
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}   # token tự sinh, không cần cấu hình
-
-      # ... tags: ghcr.io/${{ github.repository }}:latest
-```
+> 📄 **Code ví dụ:** [`examples/52-bien-the-push-len-github-container-registry-ghcr.yaml`](examples/52-bien-the-push-len-github-container-registry-ghcr.yaml)
 
 ### Best Practices cho Docker CI/CD
 
@@ -1246,6 +737,8 @@ jobs:
 3. **Đừng cache với `--no-cache`** — nếu cần build "sạch", thay vì tắt cache toàn bộ, dùng `docker build --pull` để chỉ cập nhật base image.
 4. **Scan sớm, scan mọi PR** — đặt bước Scout trước bước push để CVE bị chặn trước khi image vào registry.
 5. **Xuất SARIF lên GitHub Code Scanning** — `docker scout cves --format sarif --output report.sarif.json` rồi dùng `github/codeql-action/upload-sarif` để thấy CVE ngay trong tab Security của repo.
+
+> **Tóm gọn 1 câu:** Pipeline chuẩn: pin version action, scan Scout trước khi push, dùng cache để build nhanh, và tag image theo commit hash để truy vết.
 
 ---
 
@@ -1264,18 +757,18 @@ jobs:
 9. **Rebuild image thường xuyên** — dùng `docker build --pull` để lấy base image mới nhất (vá security patch).
 10. **Dùng `HEALTHCHECK`** — khai báo command kiểm tra tình trạng app (Compose v2+ hỗ trợ `healthcheck` trong YAML).
 
+> **Tóm gọn 1 câu:** Dockerfile tốt = base image nhỏ, multi-stage, non-root, có `.dockerignore`, và sắp lệnh tận dụng cache.
+
 ### 2. Docker Compose
 
 1. **Không dùng `version:`** — field này obsolete; chỉ dùng Compose Specification.
 2. **Tên file `compose.yaml`** — chuẩn mới, ưu tiên cao hơn `docker-compose.yml`.
 3. **Đặt tên project** — dùng `name:` top-level (Compose v2.3.3+) thay vì `-p`:
-   ```yaml
-   name: todo-app
-   services:
-     # ...
-   ```
+   > 📄 **Code ví dụ:** [`examples/53-2-docker-compose.yaml`](examples/53-2-docker-compose.yaml)
 4. **Dùng `healthcheck` + `depends_on` với condition** — chờ DB sẵn sàng trước khi start app.
 5. **External secrets qua `.env`** — không hardcode password trong YAML; dùng biến môi trường và `.env` (đã `.gitignore`).
+
+> **Tóm gọn 1 câu:** Compose chuẩn mới: bỏ `version:`, dùng `compose.yaml`, đặt `name:`, và chờ DB healthy trước khi chạy app.
 
 ### 3. Bảo mật (Security)
 
@@ -1283,16 +776,18 @@ jobs:
 2. **Không chạy container bằng `root`** — dùng `USER` instruction.
 3. **Giới hạn quyền**: `--read-only`, `--cap-drop=ALL`, `--security-opt=no-new-privileges` khi phù hợp.
 4. **Không đưa secrets vào `ARG`/`ENV`** — dùng Docker BuildKit secret mounts:
-   ```bash
-   docker build --secret id=npm,src=.npmrc .
-   ```
+   > 📄 **Code ví dụ:** [`examples/54-3-bao-mat-security.sh`](examples/54-3-bao-mat-security.sh)
 5. **Cập nhật base image thường xuyên** — rebuild định kỳ với `docker build --pull`.
+
+> **Tóm gọn 1 câu:** Bảo mật = quét image bằng Scout, không chạy root, giới hạn quyền, và không bao giờ nhúng secret vào image.
 
 ### 4. Dev Experience
 
 1. **Bind mount / `docker compose watch`** cho dev; **named volume** cho production data.
 2. **Sử dụng build cache hiệu quả** — sắp xếp Dockerfile theo tần suất thay đổi (ít đổi → trên cùng).
 3. **Kiểm tra logs real-time** với `docker logs -f` hoặc `docker compose logs -f` để debug nhanh.
+
+> **Tóm gọn 1 câu:** Dev với Docker thoải mái hơn: bind mount/`compose watch` cho code sống, cache đúng chỗ, và log real-time để bắt lỗi liền.
 
 ---
 
@@ -1313,70 +808,11 @@ Trong tutorial này, bạn đã học được:
 - [x] Tự động hóa build + scan + push với **GitHub Actions CI/CD**
 - [x] Áp dụng **best practices** (non-root, .dockerignore, build cache, build checks)
 
+> **Tóm gọn 1 câu:** Từ Dockerfile đến CI/CD, bạn đã đi trọn vòng đời: đóng gói, chạy, lưu data, chia sẻ, và tự động hóa — kèm thói quen bảo mật đúng chuẩn.
+
 ### Lệnh Docker Reference
 
-```bash
-# Images
-docker build -t <name> .                    # Build image (dùng BuildKit mặc định)
-docker build --pull .                       # Build + pull fresh base images
-docker build --no-cache -t <name> .         # Build không dùng cache
-docker build --check .                      # Lint Dockerfile (BuildKit build checks)
-docker image ls                             # List images
-docker image rm <image>                     # Remove image
-docker image prune -a                       # Remove all unused images
-docker history <image>                      # View image layers
-docker scout quickview <image>              # Tổng quan bảo mật image
-
-# Containers
-docker run -dp <host>:<container> <image> # Run container
-docker ps                                   # List running containers
-docker ps -a                                # List all containers
-docker stop <container>                     # Stop container
-docker start <container>                    # Start container
-docker rm <container>                       # Remove container
-docker logs -f <container>                  # View logs
-docker exec -it <container> sh              # Shell into container
-
-# Docker Hub
-docker login                                # Login to Docker Hub
-docker login -u <username>                  # Login with username
-docker logout                               # Logout from Docker Hub
-docker search <keyword>                     # Search images on Docker Hub
-docker pull <image>                         # Pull image from Docker Hub
-docker push <image>                         # Push image to Docker Hub
-docker push <image> --all-tags              # Push all tags of an image
-docker tag <src-image> <dst-image>          # Tag an image
-
-# Volumes
-docker volume create <name>                 # Create volume
-docker volume ls                            # List volumes
-docker volume inspect <name>                # Inspect volume
-docker volume rm <name>                    # Remove volume
-
-# Docker Scout (security scanning)
-docker scout cves <image>                  # Liệt kê CVE vulnerabilities
-docker scout cves --only-fixed <image>     # Chỉ CVE có thể fix
-docker scout cves --format sarif -o <file> # Xuất SARIF (CI/CD)
-docker scout quickview <image>             # Tổng quan nhanh
-docker scout sbom <image>                  # Generate SBOM
-docker scout recommendations <image>       # Gợi ý update base image
-docker scout compare <img1> --to <img2>    # So sánh 2 image
-
-# Buildx (multi-platform builds)
-docker buildx create --name mybuilder --use
-docker buildx inspect --bootstrap
-docker buildx build --platform linux/amd64,linux/arm64 -t <name> . --push
-
-# Compose (Docker Compose v2/v5)
-docker compose up -d                        # Start all services
-docker compose down                         # Stop all services
-docker compose ps                           # List services
-docker compose logs -f                      # View logs
-docker compose up -d --build                # Rebuild and restart
-docker compose exec <service> sh            # Shell vào service
-docker compose config                       # Validate + xem config đã merge
-docker compose watch                        # Watch mode (auto sync code)
-```
+> 📄 **Code ví dụ:** [`examples/55-lenh-docker-reference.sh`](examples/55-lenh-docker-reference.sh)
 
 ---
 

@@ -1,0 +1,10 @@
+services:
+  application:
+    build: .
+    develop:
+      watch:
+        - action: sync        # sync file thay đổi vào container
+          path: ./src
+          target: /app/src
+        - action: rebuild     # rebuild khi package.json thay đổi
+          path: ./package.json

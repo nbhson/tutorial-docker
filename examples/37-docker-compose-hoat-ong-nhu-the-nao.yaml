@@ -1,0 +1,35 @@
+# compose.yaml — Compose Specification (Docker Compose v2/v5)
+# LƯU Ý: KHÔNG khai báo "version:" nữa — field này đã obsolete từ 2020.
+
+services:
+  frontend:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    networks:
+      - app-network
+
+  backend:
+    build: ./backend
+    environment:
+      DB_HOST: database    # ← Kết nối đến DB qua tên service
+      DB_PORT: 5432
+    networks:
+      - app-network
+
+  database:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: myapp
+      POSTGRES_PASSWORD: secret
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+networks:
+  app-network:         # ← Compose tự tạo network này
+    driver: bridge
+
+volumes:
+  db-data:

@@ -1,0 +1,8 @@
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}   # token tự sinh, không cần cấu hình
+
+      # ... tags: ghcr.io/${{ github.repository }}:latest

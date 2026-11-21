@@ -1,0 +1,4 @@
+-- Trong MySQL shell
+SHOW DATABASES;
+USE todos;
+SHOW TABLES;
